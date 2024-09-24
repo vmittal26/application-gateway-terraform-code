@@ -8,13 +8,15 @@ resource "azurerm_public_ip" "app-gateway" {
 
 # since these variables are re-used - a locals block makes this more maintainable
 locals {
-  backend_address_pool_name      = "${azurerm_virtual_network.vnet.name}-beap"
-  frontend_port_name             = "${azurerm_virtual_network.vnet.name}-feport"
-  frontend_ip_configuration_name = "${azurerm_virtual_network.vnet.name}-feip"
-  http_setting_name              = "${azurerm_virtual_network.vnet.name}-be-htst"
-  listener_name                  = "${azurerm_virtual_network.vnet.name}-httplstn"
-  request_routing_rule_name      = "${azurerm_virtual_network.vnet.name}-rqrt"
-  redirect_configuration_name    = "${azurerm_virtual_network.vnet.name}-rdrcfg"
+  backend_images_address_pool_name      = "${azurerm_resource_group.app-gateway.name}-images"
+  backend_videos_address_pool_name      = "${azurerm_resource_group.app-gateway.name}-videos"
+  frontend_port_name             = "${azurerm_resource_group.app-gateway.name}-feport"
+  frontend_ip_configuration_name = "${azurerm_resource_group.app-gateway.name}-feip"
+  http_setting_name              = "${azurerm_resource_group.app-gateway.name}-be-htst"
+  listener_name                  = "${azurerm_resource_group.app-gateway.name}-server"
+  request_routing_rule_images_name      = "${azurerm_resource_group.app-gateway.name}-images-rule"
+  request_routing_rule_videos_name      = "${azurerm_resource_group.app-gateway.name}-videos-rule"
+  redirect_configuration_name    = "${azurerm_resource_group.app-gateway.name}-rdrcfg"
 }
 
 resource "azurerm_application_gateway" "gateway" {
@@ -45,8 +47,13 @@ resource "azurerm_application_gateway" "gateway" {
   }
 
   backend_address_pool {
-    name = local.backend_address_pool_name
+    name = local.backend_images_address_pool_name
     ip_addresses = [azurerm_linux_virtual_machine.vm1.private_ip_address]
+  }
+
+  backend_address_pool {
+    name = local.backend_videos_address_pool_name
+    ip_addresses = [azurerm_linux_virtual_machine.vm2.private_ip_address]
   }
 
   backend_http_settings {
@@ -64,27 +71,30 @@ resource "azurerm_application_gateway" "gateway" {
     protocol                       = "Http"
   }
 
-
-  url_path_map {
-      name                               = "testgateway-url-path"
-      default_backend_address_pool_name  = local.backend_address_pool_name
+   url_path_map {
+      name                               = "url-path-service-mapping"
+      default_backend_address_pool_name  = local.backend_images_address_pool_name
       default_backend_http_settings_name = local.http_setting_name
       path_rule {
-          name                       = "api"
+          name                       = "rule1"
           paths                      = ["/images/*"]
-          backend_address_pool_name = local.backend_address_pool_name
+          backend_address_pool_name = local.backend_images_address_pool_name
+          backend_http_settings_name = local.http_setting_name
+      }
+      path_rule {
+          name                       = "rule2"
+          paths                      = ["/videos/*"]
+          backend_address_pool_name = local.backend_videos_address_pool_name
           backend_http_settings_name = local.http_setting_name
       }
       
   }
   request_routing_rule {
-    name                       = local.request_routing_rule_name
+    name                       = local.request_routing_rule_images_name
     priority                   = 1
     rule_type                  = "PathBasedRouting"
     http_listener_name         = local.listener_name
-    backend_address_pool_name  = local.backend_address_pool_name
-    backend_http_settings_name = local.http_setting_name
-    url_path_map_name          = "testgateway-url-path"
+    url_path_map_name          = "url-path-service-mapping"
   }
 
  
